@@ -1,18 +1,23 @@
 import base64
 import io
+import json
 import time
+import uuid
 
 import httpx
 import numpy as np
 from fastapi import FastAPI, HTTPException, Response
+from model import get_default_model_name, load_model
 from PIL import Image
-
 from schemas import (
-    PredictRequest, PredictResponse,
-    BatchPredictRequest, BatchPredictResponse,
-    HealthResponse, MetricsResponse, Detection
+    BatchPredictRequest,
+    BatchPredictResponse,
+    Detection,
+    HealthResponse,
+    MetricsResponse,
+    PredictRequest,
+    PredictResponse,
 )
-from model import load_model, get_default_model_name
 
 app = FastAPI(
     title="YOLO Inference API",
@@ -21,6 +26,17 @@ app = FastAPI(
 )
 
 _metrics = {"total": 0, "success": 0, "total_ms": 0.0}
+
+
+def log_event(event: str, level: str = "INFO", **kwargs) -> None:
+    """Emite um evento estruturado em JSON para stdout."""
+    record = {
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "level": level,
+        "event": event,
+        **kwargs,
+    }
+    print(json.dumps(record, ensure_ascii=False), flush=True)
 
 def _decode_image(image_base64: str) -> np.ndarray:
     """Converte base64 → numpy array RGB."""
@@ -83,18 +99,47 @@ async def health_check():
 
 @app.post("/predict", response_model=PredictResponse)
 def predict(request: PredictRequest):
+    request_id = str(uuid.uuid4())[:8]
     _metrics["total"] += 1
+
+    log_event(
+        "predict_start",
+        request_id=request_id,
+        model=request.model_name,
+        confidence=request.confidence,
+    )
+
+    if not request.image_base64 and not request.image_url:
+        log_event(
+            "predict_error",
+            level="WARN",
+            request_id=request_id,
+            reason="missing_input",
+        )
+        raise HTTPException(status_code=422, detail="Forneça image_base64 ou image_url.")
+
     try:
         img = _load_image_from_request(request)
         result = _run_inference(img, request.model_name, request.confidence)
         _metrics["success"] += 1
         _metrics["total_ms"] += result.inference_ms
+
+        log_event(
+            "predict_complete",
+            request_id=request_id,
+            model=result.model_used,
+            detections=len(result.detections),
+            inference_ms=result.inference_ms,
+            image_size=f"{result.image_width}x{result.image_height}",
+        )
         return result
     except HTTPException:
         raise
     except FileNotFoundError as e:
+        log_event("predict_error", level="ERROR", request_id=request_id, reason=str(e))
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
+        log_event("predict_error", level="ERROR", request_id=request_id, reason=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/predict/image", responses={200: {"content": {"image/jpeg": {}}}})
