@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+# Pesos .pt são gerenciados pelo DVC (models/.gitignore será criado por dvc add).
+models/*.onnx
+output/
+images/
+.venv/
+.env

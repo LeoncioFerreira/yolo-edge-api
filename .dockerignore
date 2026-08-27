@@ -1,0 +1,8 @@
+.git
+.dvc/cache
+.pytest_cache
+__pycache__
+tests
+output
+models
+images
