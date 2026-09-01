@@ -94,6 +94,10 @@ jobs:
           dvc pull
       - name: Recuperar dataset via DVC
         run: dvc pull dataset/exports/epi-v1
+      - name: Ajustar caminho do dataset no runner
+        run: |
+          sed -i "s|^path:.*|path: $GITHUB_WORKSPACE/dataset/exports/epi-v1|" \
+            dataset/exports/epi-v1/data.yaml
       - name: Executar quality gate com dataset customizado
         run: |
           python scripts/validate_model.py \
