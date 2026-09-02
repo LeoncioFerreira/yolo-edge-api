@@ -20,6 +20,7 @@ RUN if [ "$(uname -m)" = "aarch64" ]; then \
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copia codigo da aplicacao
+COPY preprocessing/ /app/preprocessing/
 COPY app/ .
 
 EXPOSE 8000
