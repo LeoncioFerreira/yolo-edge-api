@@ -1,0 +1,36 @@
+FROM python:3.11-slim-bookworm
+
+ARG RPI_KEYRING_VERSION=2025.1+rpt1
+ARG RPI_KEYRING_SHA256=2e727149d7acb8cc7f604e66d0049161039c8aa1eaf1175e54f9e69d963d60e4
+
+# O rpicam-vid e o encoder MJPEG sao fornecidos pelo repositorio oficial
+# do Raspberry Pi OS, nao pelos repositorios da imagem Debian generica.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates curl && \
+    curl -fsSLo /tmp/raspberrypi-archive-keyring.deb \
+        "https://archive.raspberrypi.com/debian/pool/main/r/raspberrypi-archive-keyring/raspberrypi-archive-keyring_${RPI_KEYRING_VERSION}_all.deb" && \
+    echo "${RPI_KEYRING_SHA256}  /tmp/raspberrypi-archive-keyring.deb" | sha256sum -c - && \
+    dpkg -i /tmp/raspberrypi-archive-keyring.deb && \
+    printf '%s\n' \
+        'deb [signed-by=/usr/share/keyrings/raspberrypi-archive-keyring.gpg] https://archive.raspberrypi.com/debian bookworm main' \
+        > /etc/apt/sources.list.d/raspberrypi.list && \
+    apt-get update && apt-get install -y --no-install-recommends \
+        libgl1 libglib2.0-0 libgomp1 \
+        rpicam-apps-core rpicam-apps-encoder && \
+    command -v rpicam-vid && \
+    rm -f /tmp/raspberrypi-archive-keyring.deb && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY app/requirements.txt .
+RUN pip install --no-cache-dir torch torchvision \
+        --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir -r requirements.txt
+
+COPY stream/ ./stream/
+COPY preprocessing/ ./preprocessing/
+
+EXPOSE 5000
+
+CMD ["python3", "stream/mjpeg_server.py", "--host", "0.0.0.0", "--port", "5000"]

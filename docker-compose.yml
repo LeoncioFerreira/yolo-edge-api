@@ -41,7 +41,7 @@ services:
   yolo-stream:
     build:
       context: .
-      dockerfile: Dockerfile.api
+      dockerfile: Dockerfile.stream
     container_name: yolo-stream
     ports:
       - "5000:5000"
@@ -53,6 +53,7 @@ services:
       - /run/udev:/run/udev:ro
     environment:
       - MODEL_NAME=yolo-epi.pt
+      - PYTHONUNBUFFERED=1
     command: >
       python3 stream/mjpeg_server.py
       --device 0
